@@ -1,9 +1,25 @@
+start_year: 2015
+
+records_number_threshold: 1000
+
+train_size: 0.7
+cov_window: 20
+lookback_window: 20
+
+use_past_cov_in_features: true
+use_past_ret_in_features: true
+
+indicators:
+- name: rsi
+  params:
+    period: 14
+- name: vola
+  params:
+    period: 60
+- name: log
+- name: volume_change
 paths:
-  analysis: analysis
-  plots: analysis/plots
-  results: analysis/results
   processed: data/processed
   raw: data/raw
-start_year: 2022
-train_size: 0.7
-val_size: 0.1
+  scalers: data/processed/scalers
+  plots: analysis/plots
