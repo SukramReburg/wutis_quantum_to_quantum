@@ -1,0 +1,3 @@
+paths:
+  models: qnn/models
+  results: qnn/results
