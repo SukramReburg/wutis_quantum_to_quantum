@@ -1,3 +1,4 @@
 paths:
   models: qnn/models
   results: qnn/results
+  plots: qnn/plots  

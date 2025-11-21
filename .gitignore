@@ -399,7 +399,19 @@ raw/
 processed/
 
 # Uncomment when working on final model training
-models/
-analysis/plots/pred_vs_test_files/
-wutis-rnn-vol/
-analysis/plots/
+results/
+# analysis/plots/
+
+# Virtual environments
+.qnn/
+.venv/
+venv/
+env/
+
+# VSCode personal settings
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+.vscode/
+*.vscode/*

@@ -1,14 +1,17 @@
-start_year: 2015
-
-records_number_threshold: 1000
-
-train_size: 0.7
+assets:
+- AMZN
+- MSFT
+- NVDA
+- GLD
+- USO
+- IBM
+- QBTS
+- RGTI
+- ACWI
+- QUBT
+- IONQ
+- BNDX
 cov_window: 20
-lookback_window: 20
-
-use_past_cov_in_features: true
-use_past_ret_in_features: true
-
 indicators:
 - name: rsi
   params:
@@ -18,8 +21,15 @@ indicators:
     period: 60
 - name: log
 - name: volume_change
+lookback_window: 20
+n_assets: 12
 paths:
+  plots: analysis/plots
   processed: data/processed
   raw: data/raw
   scalers: data/processed/scalers
-  plots: analysis/plots
+records_number_threshold: 1000
+start_year: 2015
+train_size: 0.7
+use_past_cov_in_features: true
+use_past_ret_in_features: true
