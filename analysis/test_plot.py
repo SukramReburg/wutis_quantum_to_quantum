@@ -66,7 +66,7 @@ def plot_returns(
         plt.plot(x, r_pred, label="Predicted log-return", linestyle="--")
         plt.xlabel("Test step")
         plt.ylabel("Log-return")
-        plt.title(f"Daily log-returns - {asset_name}")
+        plt.title(f"Daily log-returns -  {asset_name}")
         plt.legend()
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
