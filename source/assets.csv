@@ -1,0 +1,13 @@
+ticker,category,name
+QBTS,Quantum Equity,D-Wave Quantum Inc.
+RGTI,Quantum Equity,"Rigetti Computing, Inc."
+IONQ,Quantum Equity,"IonQ, Inc."
+AMZN,Quantum Equity,"Amazon.com, Inc."
+MSFT,Quantum Equity,"Microsoft Corporation"
+QUBT,Quantum Equity,"Quantum Computing Inc."
+NVDA,Quantum Equity,NVIDIA Corporation
+IBM,Quantum Equity,International Business Machine
+BNDX,International Bonds,Vanguard Total International Bo
+ACWI,Global Equity,iShares MSCI ACWI ETF
+GLD,Commodity,SPDR Gold Trust
+USO,Commodity,United States Oil Fund
