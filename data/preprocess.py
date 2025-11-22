@@ -34,6 +34,7 @@ def merge_dataframes(df_list):
     if not df_list:
         return pd.DataFrame()
     
+    symbols = []
     merged_df = pd.DataFrame()
     for df in df_list:
         # if 'symbol' column exists, use it for prefix
@@ -41,7 +42,7 @@ def merge_dataframes(df_list):
             symbol = df['symbol'].iloc[0]
         else:
             symbol = "UNK"
-
+        symbols.append(symbol)
         # make sure timestamp is a column for the merge
         if df.index.name == 'timestamp':
             df = df.reset_index()
@@ -62,6 +63,9 @@ def merge_dataframes(df_list):
 
     # Drop any remaining string columns (e.g. symbol)
     string_columns = merged_df.select_dtypes(include=['object']).columns
+    with open('config/data_config.yaml', 'w') as f:
+        config['assets'] = symbols
+        yaml.dump(config, f)
     merged_df.drop(columns=string_columns, inplace=True)
 
     # Set timestamp back as index

@@ -64,6 +64,10 @@ def fetch_and_save_data():
     print("Data fetching completed successfully.")
     print(f"Count of tickers fetched: {ticker_success_count}")
 
+    with open('config/data_config.yaml', 'w') as f:
+        config['n_assets'] = ticker_success_count
+        yaml.dump(config, f)
+
 
 if __name__ == "__main__":
     fetch_and_save_data()
