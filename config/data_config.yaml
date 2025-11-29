@@ -11,7 +11,7 @@ assets:
 - QUBT
 - IONQ
 - BNDX
-cov_window: 20
+cov_window: 4 # Changed from 20 to 4 (since donw on weekly basis)
 indicators:
 - name: rsi
   params:
@@ -21,7 +21,7 @@ indicators:
     period: 60
 - name: log
 - name: volume_change
-lookback_window: 20
+lookback_window: 4 # Changed from 20 to 4 (since donw on weekly basis)
 n_assets: 12
 paths:
   plots: analysis/plots
