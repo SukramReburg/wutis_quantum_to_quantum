@@ -54,6 +54,14 @@ class VolumeChange(Indicator):
 
     def calculate(self):
         return self.data['volume'].pct_change()
+        volume = pd.to_numeric(self.data['volume'], errors='coerce')
+
+        # Avoid infinite jumps caused by zero volume days (e.g., halts or missing
+        # prints) by treating zeros as missing before computing the change.
+        volume.replace(0, np.nan, inplace=True)
+
+        change = volume.pct_change()
+        return change
     
 
 indicators_impl = {'rsi': RSI, 

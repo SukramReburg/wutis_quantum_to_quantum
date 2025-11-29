@@ -6,6 +6,8 @@ import os
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
+from alpaca.data.enums import Adjustment
+
 
 
 def fetch_alpaca(ticker, start_year):
@@ -21,7 +23,8 @@ def fetch_alpaca(ticker, start_year):
         symbol_or_symbols=ticker,
         timeframe=TimeFrame.Day,
         start=start_dt,
-        end=datetime.now().replace(day=datetime.now().day-1)
+        end=datetime.now().replace(day=datetime.now().day-1),
+        adjustment=Adjustment.ALL
     )
 
     client = StockHistoricalDataClient(api_key, secret_key)
