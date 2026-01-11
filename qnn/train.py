@@ -1,16 +1,23 @@
 """
 PyTorch + Qiskit QNN training for:
-- next-day covariance (mode="cov")
-- next-day returns (mode="returns")
+- next-period covariance (mode="cov")
+- next-period returns (mode="returns")
 """
 import os
+import json
+from datetime import datetime
+from pathlib import Path
 import numpy as np
 from typing import Optional
 import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import yaml
+from qnn_metrics_logger import QNNEvaluationLogger
+from metrics_report import generate_pdf_report
 
 from encode import transform_features
 from model import (build_estimator_qnn,
@@ -31,6 +38,27 @@ def load_paths_from_config(config_path: str = "config/data_config.yaml"):
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     dataset_path = os.path.join(base_dir, paths["processed"])
     return config, base_dir, dataset_path
+
+
+def _last_finite_or_none(values: object) -> Optional[float]:
+    arr = np.asarray(values)
+    if arr.size == 0:
+        return None
+    mask = np.isfinite(arr)
+    if not np.any(mask):
+        return None
+    return float(arr[mask][-1])
+
+
+def _append_run_summary(path: Optional[str], summary: dict) -> None:
+    if path is None:
+        return
+    directory = os.path.dirname(path)
+    if directory != "":
+        os.makedirs(directory, exist_ok=True)
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(summary, ensure_ascii=True))
+        f.write("\n")
 
 # ======================================================================
 # TRAINING LOOP (PYTORCH)
@@ -54,6 +82,12 @@ def train_qnn(
     entanglement: str = "ring",  # for rxrz QNN
     learning_curve_png_path: Optional[str] = None,
     model_save_path: Optional[str] = None,
+    debug_metrics_path: Optional[str] = None,
+    debug_metrics_archive_path: Optional[str] = None,
+    debug_metrics_meta: Optional[dict] = None,
+    debug_report_path: Optional[str] = None,
+    debug_report_archive_path: Optional[str] = None,
+    run_summary_path: Optional[str] = None,
 ):
     """
     Train a QNN with PyTorch and optionally save artifacts.
@@ -110,6 +144,9 @@ def train_qnn(
         use_dense_head=use_dense_head,
     ).to(device)
 
+    # Use the local evaluation logger (not attached to the TorchConnector)
+    metrics = QNNEvaluationLogger()
+
     # Convert data to tensors
     X_train_t = torch.tensor(X_train, dtype=torch.float32, device=device)
     Y_train_t = torch.tensor(Y_train, dtype=torch.float32, device=device)
@@ -130,11 +167,21 @@ def train_qnn(
         model.train()
         running_loss = 0.0
 
+        metrics.start_epoch()  # metric_logger --> initialize epoch
+
+
         for xb, yb in train_loader:
             optimizer.zero_grad()
+
             preds = model(xb)
             loss = loss_fn(preds, yb)
             loss.backward()
+
+            metrics.log_after_backward(model)  # metric_logger --> log after backward
+            with torch.no_grad():
+                q_out = model.quantum(xb)
+            metrics.log_qnn_output(q_out)
+
             optimizer.step()
             running_loss += loss.item() * xb.size(0)
 
@@ -149,9 +196,35 @@ def train_qnn(
         train_losses.append(train_loss)
         test_losses.append(test_loss)
 
+        metrics.end_epoch(model, train_loss=train_loss, val_loss=test_loss)  # metric_logger --> finalize epoch
+
+        # Per epoch metrics =========================================================
+        qm_grad = metrics.quantum_grad_norm_per_epoch[-1]
+        cl_grad = metrics.classical_grad_norm_per_epoch[-1]
+        qm_up   = metrics.quantum_update_norm_per_epoch[-1]
+        cl_up   = metrics.classical_update_norm_per_epoch[-1]
+        ratio   = metrics.update_balance_ratio_per_epoch[-1]
+
+        qmean   = metrics.qnn_output_mean_per_epoch[-1]
+        qvar    = metrics.qnn_output_var_per_epoch[-1]
+        print(
+            f"[Epoch {epoch:03d}]  "
+            f"Train: {train_loss:.6f} | Val: {test_loss:.6f} | "
+            f"Q-Grad: {qm_grad:.4e} | C-Grad: {cl_grad:.4e} | "
+            f"Q-Upd: {qm_up:.4e} | C-Upd: {cl_up:.4e} | Q/C: {ratio:.4f} | "
+            f"Q-Mean: {qmean:.3f} | Q-Var: {qvar:.3f} "
+            f"=========================================================================="
+        )
+
+        # ==========================================================================
+
         print(
             f"Epoch {epoch:03d} | train MSE={train_loss:.6e} | test MSE={test_loss:.6e}"
         )
+
+    # Prediction smoothness (once per run)
+    sens_score = metrics.run_sensitivity_test(model, X_test_t)
+    print(f"Prediction smoothness (sensitivity): {sens_score:.6e}")
 
     # Final predictions
     model.eval()
@@ -198,6 +271,80 @@ def train_qnn(
         torch.save(model.state_dict(), model_save_path)
         print(f"Saved PyTorch model to {model_save_path}")
 
+    metrics_payload = metrics.as_dict()
+
+    # Save temporary debug metrics (latest + archive)
+    if debug_metrics_path is not None or debug_metrics_archive_path is not None:
+        payload = dict(metrics_payload)
+        if debug_metrics_meta is not None:
+            payload["meta"] = np.array([json.dumps(debug_metrics_meta)], dtype=object)
+
+        for path in (debug_metrics_path, debug_metrics_archive_path):
+            if path is None:
+                continue
+            directory = os.path.dirname(path)
+            if directory != "":
+                os.makedirs(directory, exist_ok=True)
+            np.savez_compressed(path, **payload)
+            print(f"Saved temporary metrics to {path}")
+
+    # Auto-generate PDF reports (latest + archive)
+    if debug_report_path is not None or debug_report_archive_path is not None:
+        meta = debug_metrics_meta if debug_metrics_meta is not None else {}
+        report_pairs = [
+            (debug_report_path, debug_metrics_path),
+            (debug_report_archive_path, debug_metrics_archive_path),
+        ]
+        for out_path, src_path in report_pairs:
+            if out_path is None or src_path is None:
+                continue
+            try:
+                generate_pdf_report(
+                    metrics=metrics_payload,
+                    meta=meta,
+                    output_path=Path(out_path),
+                    source_path=Path(src_path),
+                )
+                print(f"Wrote metrics report to {out_path}")
+            except Exception as exc:
+                print(f"Warning: failed to generate metrics report at {out_path}: {exc}")
+
+    # Append run summary for comparison
+    if run_summary_path is not None:
+        meta = debug_metrics_meta if debug_metrics_meta is not None else {}
+        summary = {
+            "run_tag": meta.get("run_tag"),
+            "timestamp": meta.get("timestamp"),
+            "mode": meta.get("mode"),
+            "feature_mode": meta.get("feature_mode"),
+            "use_dense_head": meta.get("use_dense_head"),
+            "circuit_type": meta.get("circuit_type"),
+            "entanglement": meta.get("entanglement"),
+            "n_qubits": meta.get("n_qubits"),
+            "n_layers": meta.get("n_layers"),
+            "batch_size": meta.get("batch_size"),
+            "learning_rate": meta.get("learning_rate"),
+            "n_epochs": meta.get("n_epochs"),
+            "final_mse": final_mse,
+            "train_loss_last": _last_finite_or_none(metrics_payload.get("train_loss_per_epoch")),
+            "val_loss_last": _last_finite_or_none(metrics_payload.get("val_loss_per_epoch")),
+            "quantum_grad_norm_last": _last_finite_or_none(metrics_payload.get("quantum_grad_norm_per_epoch")),
+            "classical_grad_norm_last": _last_finite_or_none(metrics_payload.get("classical_grad_norm_per_epoch")),
+            "quantum_update_norm_last": _last_finite_or_none(metrics_payload.get("quantum_update_norm_per_epoch")),
+            "classical_update_norm_last": _last_finite_or_none(metrics_payload.get("classical_update_norm_per_epoch")),
+            "update_ratio_last": _last_finite_or_none(metrics_payload.get("update_balance_ratio_per_epoch")),
+            "qnn_output_mean_last": _last_finite_or_none(metrics_payload.get("qnn_output_mean_per_epoch")),
+            "qnn_output_var_last": _last_finite_or_none(metrics_payload.get("qnn_output_var_per_epoch")),
+            "qnn_output_min_last": _last_finite_or_none(metrics_payload.get("qnn_output_min_per_epoch")),
+            "qnn_output_max_last": _last_finite_or_none(metrics_payload.get("qnn_output_max_per_epoch")),
+            "sensitivity_last": _last_finite_or_none(metrics_payload.get("sensitivity_scores")),
+            "metrics_path_latest": debug_metrics_path,
+            "metrics_path_archive": debug_metrics_archive_path,
+            "report_path_latest": debug_report_path,
+            "report_path_archive": debug_report_archive_path,
+        }
+        _append_run_summary(run_summary_path, summary)
+
     return {
         "model": model,
         "qnn": qnn,
@@ -205,6 +352,7 @@ def train_qnn(
         "train_losses": np.array(train_losses, dtype=np.float32),
         "test_losses": np.array(test_losses, dtype=np.float32),
         "final_mse": final_mse,
+        "metrics": metrics_payload,
     }
 
 
@@ -230,6 +378,7 @@ def train_qnn_from_npz(
     learning_curve_png_name: Optional[str] = None,
     model_name: Optional[str] = None,
     save_artifacts: bool = True,             # False = no png/npz/pth (for Optuna)
+    save_debug_metrics: Optional[bool] = None,  # None -> follow save_artifacts
 ):
     """
     Loads your saved qnn_datasets.npz and trains a PyTorch-based QNN model
@@ -269,8 +418,29 @@ def train_qnn_from_npz(
     os.makedirs(results_path, exist_ok=True)
     os.makedirs(plots_path, exist_ok=True)
 
+    if save_debug_metrics is None:
+        save_debug_metrics = save_artifacts
+
+    tag = f"{mode}_{feature_mode}_{'hybrid' if use_dense_head else 'pure'}_{circuit_type}"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_tag = f"{tag}_{n_qubits}q_{n_layers}l_{timestamp}"
+
+    debug_meta = {
+        "run_tag": run_tag,
+        "timestamp": timestamp,
+        "mode": mode,
+        "feature_mode": feature_mode,
+        "use_dense_head": use_dense_head,
+        "circuit_type": circuit_type,
+        "entanglement": entanglement,
+        "n_qubits": n_qubits,
+        "n_layers": n_layers,
+        "batch_size": batch_size,
+        "learning_rate": learning_rate,
+        "n_epochs": n_epochs,
+    }
+
     if save_artifacts:
-        tag = f"{mode}_{feature_mode}_{'hybrid' if use_dense_head else 'pure'}_{circuit_type}"
         if circuit_png_name is None:
             circuit_png_name = f"qnn_{tag}_circuit.png"
         if pred_npz_name is None:
@@ -290,6 +460,22 @@ def train_qnn_from_npz(
         learning_curve_png_path = None
         model_save_path = None
 
+    if save_debug_metrics:
+        debug_metrics_path = os.path.join(results_path, "metrics", "latest", "_tmp_metrics_latest_debug.npz")
+        debug_metrics_archive_path = os.path.join(results_path, "metrics", "archive", f"_tmp_metrics_{run_tag}.npz")
+    else:
+        debug_metrics_path = None
+        debug_metrics_archive_path = None
+
+    if save_artifacts:
+        debug_report_path = os.path.join(results_path, "reports", "latest", "_tmp_metrics_latest_debug.pdf")
+        debug_report_archive_path = os.path.join(results_path, "reports", "archive", f"_tmp_metrics_{run_tag}.pdf")
+        run_summary_path = os.path.join(results_path, "metrics", "metrics_runs.jsonl")
+    else:
+        debug_report_path = None
+        debug_report_archive_path = None
+        run_summary_path = None
+
     result = train_qnn(
         X_train_raw=X_train_raw,
         Y_train=Y_train,
@@ -308,6 +494,12 @@ def train_qnn_from_npz(
         circuit_type=circuit_type,
         learning_curve_png_path=learning_curve_png_path,
         model_save_path=model_save_path,
+        debug_metrics_path=debug_metrics_path,
+        debug_metrics_archive_path=debug_metrics_archive_path,
+        debug_metrics_meta=debug_meta,
+        debug_report_path=debug_report_path,
+        debug_report_archive_path=debug_report_archive_path,
+        run_summary_path=run_summary_path,
     )
 
     return result
@@ -323,11 +515,11 @@ if __name__ == "__main__":
     train_qnn_from_npz(
         config_path="config/data_config.yaml",
         mode="returns",
-        n_qubits=6,
-        n_layers=6,
+        n_qubits=2,
+        n_layers=2,
         feature_mode="angles",
         use_dense_head=True,
-        n_epochs=10,
+        n_epochs=5,
         batch_size=32,
         learning_rate=1e-3,
         circuit_type="rxrz",
@@ -338,11 +530,11 @@ if __name__ == "__main__":
     train_qnn_from_npz(
         config_path="config/data_config.yaml",
         mode="cov",
-        n_qubits=7,
-        n_layers=6,
+        n_qubits=2,
+        n_layers=2,
         feature_mode="pca",
         use_dense_head=True,
-        n_epochs=10,
+        n_epochs=5,
         batch_size=32,
         learning_rate=1e-3,
         circuit_type="rxrz",

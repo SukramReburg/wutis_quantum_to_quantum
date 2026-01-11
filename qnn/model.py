@@ -172,6 +172,13 @@ def visualise_circuit(qc, save_path: Optional[str] = None):
         if directory != "":
             os.makedirs(directory, exist_ok=True)
         circuit_drawer(qc, output="mpl", filename=save_path)
+        # Close matplotlib figures created by circuit_drawer to avoid
+        # Tkinter cleanup on program exit (prevents "main thread is not in main loop").
+        try:
+            import matplotlib.pyplot as _plt
+            _plt.close('all')
+        except Exception:
+            pass
         print(f"\nCircuit diagram saved to: {save_path}\n")
 
 

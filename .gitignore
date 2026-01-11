@@ -415,3 +415,7 @@ env/
 
 .vscode/
 *.vscode/*
+# Ignore data_config and qnn plot
+
+qnn/plots/qnn_returns_angles_hybrid_rxrz_circuit.png
+wutis_quantum_to_quantum.code-workspace
