@@ -3,9 +3,16 @@ Includes Optuna hyperparameter tuning over:
 - n_qubits, n_layers, feature_mode, use_dense_head,
   circuit_type, learning_rate, batch_size
 """
+import json
+import os
+from datetime import datetime
 from typing import Optional
 import optuna
-from qnn.train import train_qnn_from_npz
+import yaml
+try:
+    from qnn.train import train_qnn_from_npz
+except ModuleNotFoundError:
+    from train import train_qnn_from_npz
 
 # ======================================================================
 # OPTUNA HYPERPARAMETER TUNING
@@ -23,14 +30,14 @@ def create_optuna_objective(
     """
     def objective(trial: optuna.trial.Trial) -> float:
         # Hyperparameter search space
-        n_qubits = trial.suggest_int("n_qubits", 3, 7)
-        n_layers = trial.suggest_int("n_layers", 1, 4)
+        n_qubits = trial.suggest_int("n_qubits", 2, 5)
+        n_layers = trial.suggest_int("n_layers", 2, 4)
         feature_mode = trial.suggest_categorical("feature_mode", ["angles", "pca"])
-        use_dense_head = trial.suggest_categorical("use_dense_head", [True, False])
-        circuit_type = trial.suggest_categorical("circuit_type", ["rxrz", "zz_feature"])
-        learning_rate = trial.suggest_float("learning_rate", 1e-4, 5e-3, log=True)
-        batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
-        entanglement = trial.suggest_categorical("entanglement", ["ring", "linear"])
+        use_dense_head = trial.suggest_categorical("use_dense_head", [True])
+        circuit_type = trial.suggest_categorical("circuit_type", ["rxrz"])
+        learning_rate = trial.suggest_float("learning_rate", 1e-4, 2e-3, log=True)
+        batch_size = trial.suggest_categorical("batch_size", [16, 32])
+        entanglement = trial.suggest_categorical("entanglement", ["ring"])
 
         print(
             f"\n[Optuna trial {trial.number}] "
@@ -68,6 +75,7 @@ def run_optuna_study(
     n_epochs: int = 10,
     study_name: Optional[str] = None,
     storage: Optional[str] = None,
+    best_params_path: Optional[str] = None,
 ):
     """
     Run Optuna study and return it.
@@ -94,18 +102,43 @@ def run_optuna_study(
     for k, v in study.best_params.items():
         print(f"  {k}: {v}")
 
+    if best_params_path is None:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        model_config_path = os.path.join(base_dir, "config", "model_config.yaml")
+        with open(model_config_path, "r") as f:
+            model_config = yaml.safe_load(f)
+        results_path = os.path.join(base_dir, model_config["paths"]["results"])
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        tag = study_name if study_name else mode
+        filename = f"optuna_best_params_{tag}_{stamp}.json"
+        best_params_path = os.path.join(results_path, "optuna", filename)
+
+    os.makedirs(os.path.dirname(best_params_path), exist_ok=True)
+    payload = {
+        "study_name": study.study_name,
+        "mode": mode,
+        "best_value": float(study.best_value),
+        "best_params": dict(study.best_params),
+        "n_trials": n_trials,
+        "n_epochs": n_epochs,
+        "storage": storage,
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+    }
+    with open(best_params_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, sort_keys=True)
+    print(f"Wrote Optuna best params to {best_params_path}")
+
     return study
 
 if __name__ == "__main__":
-    # Example 3: RUN OPTUNA TUNING FOR RETURNS (quick small study)
-    # Comment out if you don't want to tune every run.
-    print("\n===== Running Optuna tuning for RETURNS (demo) =====")
+    # RUN OPTUNA TUNING FOR RETURNS (overnight)
+    print("===== Running Optuna tuning for RETURNS (overnight) =====")
     _ = run_optuna_study(
         config_path="config/data_config.yaml",
         mode="returns",
         npz_name="qnn_datasets.npz",
-        n_trials=10,          # increase to 50–100 for real tuning
-        n_epochs=10,          # smaller epochs for tuning
-        study_name="qnn_returns_demo",
-        storage="sqlite:///qnn_optuna.db",         # or e.g. "sqlite:///qnn_optuna.db"
+        n_trials=20,
+        n_epochs=8,
+        study_name="qnn_returns_overnight",
+        storage="sqlite:///qnn_optuna.db",
     )

@@ -49,7 +49,7 @@ def plot_returns(
         plt.plot(x, cum_pred, label="Predicted cumulative return", linestyle="--")
         plt.xlabel("Test step")
         plt.ylabel("Cumulative return")
-        plt.title(f"Cumulative returns path – {asset_name}")
+        plt.title(f"Cumulative returns path - {asset_name}")
         plt.legend()
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
@@ -76,13 +76,23 @@ def plot_returns(
             plt.show()
 
 if __name__ == "__main__":
+    def _latest_predictions(results_dir: str) -> str:
+        candidates = [
+            name for name in os.listdir(results_dir)
+            if name.startswith("qnn_") and name.endswith("_predictions.npz")
+        ]
+        if not candidates:
+            raise FileNotFoundError(f"No prediction files found in {results_dir}")
+        candidates.sort(key=lambda name: os.path.getmtime(os.path.join(results_dir, name)))
+        return os.path.join(results_dir, candidates[-1])
+
     # path to your predictions file from the QNN script
     with open('config/model_config.yaml', 'r') as f:
         config = yaml.safe_load(f)
     paths = config['paths']
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     results_path = os.path.join(base_dir, paths['results'])
-    pred_path = os.path.join(results_path, "qnn_torch_returns_angles_hybrid_predictions.npz")
+    pred_path = _latest_predictions(results_path)
 
     data = np.load(pred_path)
     Y_true = data["Y_true_test"]   # shape: (T, n_assets)
