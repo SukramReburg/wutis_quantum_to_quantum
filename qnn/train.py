@@ -1,7 +1,7 @@
 """
 PyTorch + Qiskit QNN training for:
-- next-day covariance (mode="cov")
-- next-day returns (mode="returns")
+- next-period covariance (mode="cov")
+- next-period returns (mode="returns")
 """
 import os
 import numpy as np
