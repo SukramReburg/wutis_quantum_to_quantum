@@ -30,8 +30,8 @@ def create_optuna_objective(
     """
     def objective(trial: optuna.trial.Trial) -> float:
         # Hyperparameter search space
-        n_qubits = trial.suggest_int("n_qubits", 2, 5)
-        n_layers = trial.suggest_int("n_layers", 2, 4)
+        n_qubits = trial.suggest_int("n_qubits", 2, 8)
+        n_layers = trial.suggest_int("n_layers", 2, 8)
         feature_mode = trial.suggest_categorical("feature_mode", ["angles", "pca"])
         use_dense_head = trial.suggest_categorical("use_dense_head", [True])
         circuit_type = trial.suggest_categorical("circuit_type", ["rxrz"])
@@ -137,7 +137,7 @@ if __name__ == "__main__":
         config_path="config/data_config.yaml",
         mode="returns",
         npz_name="qnn_datasets.npz",
-        n_trials=20,
+        n_trials=50,
         n_epochs=8,
         study_name="qnn_returns_overnight",
         storage="sqlite:///qnn_optuna.db",

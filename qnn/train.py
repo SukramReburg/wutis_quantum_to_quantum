@@ -515,13 +515,13 @@ if __name__ == "__main__":
     train_qnn_from_npz(
         config_path="config/data_config.yaml",
         mode="returns",
-        n_qubits=2,
-        n_layers=4,
+        n_qubits=7,
+        n_layers=8,
         feature_mode="angles",
         use_dense_head=True,
         n_epochs=8,
         batch_size=16,
-        learning_rate=0.0019284537502481723,
+        learning_rate=0.0013867537388505338,
         circuit_type="rxrz",
         save_artifacts=True,
     )

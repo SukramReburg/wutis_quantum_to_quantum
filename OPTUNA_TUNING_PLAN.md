@@ -5,7 +5,7 @@ for the next tuning pass.
 
 ## Run Settings
 - Mode: `returns`
-- Trials: `20`
+- Trials: `50`
 - Epochs per trial: `8`
 - Storage: `sqlite:///qnn_optuna.db`
 - Best params export: `qnn/results/optuna/optuna_best_params_<study>_<timestamp>.json`
@@ -14,8 +14,8 @@ for the next tuning pass.
 
 | Parameter | Range / Choices | Reasoning |
 | --- | --- | --- |
-| `n_qubits` | 2–5 | Cap runtime and stay within the overnight budget while still exploring larger circuits. |
-| `n_layers` | 2–4 | Slightly deeper circuits to improve capacity while still controlling runtime. |
+| `n_qubits` | 2–8 | Explore higher-capacity circuits while still capping the search for runtime. |
+| `n_layers` | 2–8 | Broader depth search to capture more expressive models. |
 | `feature_mode` | `["angles", "pca"]` | Compare the two current encodings without expanding the space further. |
 | `use_dense_head` | `[True]` | Required for cov under low qubits; avoids invalid output sizes for small `n_qubits`. |
 | `circuit_type` | `["rxrz"]` | Faster, stable baseline; avoid the slower `zz_feature` for overnight runs. |
