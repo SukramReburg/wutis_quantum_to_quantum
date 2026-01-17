@@ -5,9 +5,9 @@ import yaml
 import shutil
 
 SCRIPTS = [
-    "data/01_fetch.py",
-    "data/02_preprocess.py",
-    "data/03_datasets.py",
+    "data/fetch.py",
+    "data/preprocess.py",
+    "data/datasets.py",
 ]
 
 
