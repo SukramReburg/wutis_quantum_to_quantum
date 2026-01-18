@@ -19,7 +19,7 @@ def optimize_weights(mu, cov_mat, u=0.10):
     # - long only (tbd)
     constraints = [
         cp.sum(x) == 1,
-        mu @ x >= u,
+        #mu @ x >= u,
         x >= 0   # long-only (remove if shorting allowed)
     ]
 
