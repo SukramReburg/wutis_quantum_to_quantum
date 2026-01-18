@@ -519,7 +519,7 @@ if __name__ == "__main__":
         n_layers=8,
         feature_mode="angles",
         use_dense_head=True,
-        n_epochs=8,
+        n_epochs=14,
         batch_size=16,
         learning_rate=0.0013867537388505338,
         circuit_type="rxrz",
