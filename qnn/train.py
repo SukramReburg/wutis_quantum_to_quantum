@@ -511,33 +511,34 @@ def train_qnn_from_npz(
 
 if __name__ == "__main__":
 
-    print("\n===== Training RETURNS QNN =====")
-    train_qnn_from_npz(
-        config_path="config/data_config.yaml",
-        mode="returns",
-        n_qubits=7,
-        n_layers=8,
-        feature_mode="angles",
-        use_dense_head=True,
-        n_epochs=14,
-        batch_size=16,
-        learning_rate=0.0013867537388505338,
-        circuit_type="rxrz",
-        save_artifacts=True,
-    )
+    # print("\n===== Training RETURNS QNN =====")
+    # train_qnn_from_npz(
+    #     config_path="config/data_config.yaml",
+    #     mode="returns",
+    #     n_qubits=7,
+    #     n_layers=8,
+    #     feature_mode="angles",
+    #     use_dense_head=True,
+    #     n_epochs=14,
+    #     batch_size=16,
+    #     learning_rate=0.0013867537388505338,
+    #     circuit_type="rxrz",
+    #     save_artifacts=True,
+    # )
 
     print("\n===== Training COV QNN =====")
     train_qnn_from_npz(
         config_path="config/data_config.yaml",
         mode="cov",
         n_qubits=2,
-        n_layers=2,
+        n_layers=4,
         feature_mode="pca",
         use_dense_head=True,
-        n_epochs=5,
-        batch_size=32,
-        learning_rate=1e-3,
+        n_epochs=14,
+        batch_size=16,
+        learning_rate=0.001929580505250559,
         circuit_type="rxrz",
+        entanglement="ring",
         save_artifacts=True,
     )
 

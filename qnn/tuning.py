@@ -30,8 +30,8 @@ def create_optuna_objective(
     """
     def objective(trial: optuna.trial.Trial) -> float:
         # Hyperparameter search space
-        n_qubits = trial.suggest_int("n_qubits", 2, 8)
-        n_layers = trial.suggest_int("n_layers", 2, 8)
+        n_qubits = trial.suggest_int("n_qubits", 2, 7)
+        n_layers = trial.suggest_int("n_layers", 2, 6)
         feature_mode = trial.suggest_categorical("feature_mode", ["angles", "pca"])
         use_dense_head = trial.suggest_categorical("use_dense_head", [True])
         circuit_type = trial.suggest_categorical("circuit_type", ["rxrz"])
@@ -71,7 +71,7 @@ def run_optuna_study(
     config_path: str,
     mode: str,
     npz_name: str = "qnn_datasets.npz",
-    n_trials: int = 30,
+    n_trials: int = 25,
     n_epochs: int = 10,
     study_name: Optional[str] = None,
     storage: Optional[str] = None,
@@ -131,14 +131,14 @@ def run_optuna_study(
     return study
 
 if __name__ == "__main__":
-    # RUN OPTUNA TUNING FOR RETURNS (overnight)
-    print("===== Running Optuna tuning for RETURNS (overnight) =====")
+    # RUN OPTUNA TUNING FOR COV (overnight)
+    print("===== Running Optuna tuning for COV (overnight) =====")
     _ = run_optuna_study(
         config_path="config/data_config.yaml",
-        mode="returns",
+        mode="cov",
         npz_name="qnn_datasets.npz",
-        n_trials=50,
+        n_trials=25,
         n_epochs=8,
-        study_name="qnn_returns_overnight",
+        study_name="qnn_cov_overnight",
         storage="sqlite:///qnn_optuna.db",
     )
