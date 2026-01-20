@@ -31,7 +31,7 @@ weekly_ends = log_ret_daily.resample("W-FRI").last().index
 # ============================================================
 # Rebuild ALL covariance matrices - from predictions
 # ============================================================
-cov_preds = np.load("Optimizer/prediction data/qnn_cov_angles_hybrid_rxrz_predictions.npz") 
+cov_preds = np.load("Optimizer/prediction data/qnn_cov_pca_hybrid_rxrz_predictions.npz") 
 
 # Shape: (T, n_assets*(n_assets+1)//2)
 Y_cov = cov_preds["Y_pred_test"]
