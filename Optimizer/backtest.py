@@ -23,6 +23,11 @@ log_ret_daily = data[ret_cols].dropna()
 # Get correct order of the symbols - ensure sorted like qnn
 symbols_all = sorted({c.split('_')[0] for c in ret_cols})
 
+# Normalized column names for log returns
+log_ret_daily_named = log_ret_daily.copy()
+log_ret_daily_named.columns = [c.replace("_log", "") for c in log_ret_daily_named.columns]
+log_ret_daily_named = log_ret_daily_named[symbols_all]
+
 # weekly rebalance calendar
 weekly_ends = log_ret_daily.resample("W-FRI").last().index
 
@@ -129,6 +134,25 @@ ret_daily = np.expm1(log_ret_daily)
 ret_daily.columns = [c.replace("_log", "") for c in ret_daily.columns]
 # Enforce column order
 ret_daily = ret_daily[symbols_all]
+
+
+# ============================================================
+# Realized covariance matrices (weekly, from daily log returns)
+# ============================================================
+realized_cov_by_week = {}
+
+for i, rebalance_date in enumerate(weekly_dates):
+    if i < len(weekly_dates) - 1:
+        start = rebalance_date
+        end = weekly_dates[i + 1]
+        daily_slice = log_ret_daily_named.loc[start:end]
+    else:
+        daily_slice = log_ret_daily_named.loc[rebalance_date:]
+
+    if daily_slice.shape[0] < 2:
+        continue
+
+    realized_cov_by_week[rebalance_date] = daily_slice.cov().values
 
 
 # Prepare dictionaries to store results
@@ -400,4 +424,170 @@ plt.close()
 print(f"Saved zoomed 2025 rebalance plot to: {comparison_plot_path}")
 
 
+# ============================================================
+# Covariance diagnostics & regime correlation plots
+# ============================================================
+
+cov_dates = [d for d in weekly_dates if d in realized_cov_by_week]
+cov_dates = pd.DatetimeIndex(cov_dates).tz_localize(None)
+
+if len(cov_dates) > 0:
+    # --------------------------------------------------------
+    # 1) Actual vs. predicted covariance (variance time series)
+    # --------------------------------------------------------
+    assets_to_plot = symbols_all[: min(4, len(symbols_all))]
+    cov_plot_path = os.path.join(
+        output_dir, "covariance_actual_vs_predicted_variances.png"
+    )
+
+    fig, axes = plt.subplots(2, 2, figsize=(12, 6), sharex=True)
+    axes = axes.ravel()
+
+    for idx, asset in enumerate(assets_to_plot):
+        asset_idx = symbols_all.index(asset)
+
+        predicted_var = [
+            Sigma_weekly_daily_cov[d][asset_idx, asset_idx]
+            for d in cov_dates
+        ]
+        actual_var = [
+            realized_cov_by_week[d][asset_idx, asset_idx]
+            for d in cov_dates
+        ]
+
+        axes[idx].plot(cov_dates, actual_var, label="Realized", linewidth=1.5)
+        axes[idx].plot(
+            cov_dates, predicted_var, label="Predicted", linestyle="--"
+        )
+        axes[idx].set_title(f"{asset} Variance")
+        axes[idx].grid(True, alpha=0.3)
+
+    for ax in axes:
+        ax.tick_params(axis="x", rotation=45)
+
+    for idx in range(len(assets_to_plot), len(axes)):
+        axes[idx].axis("off")
+
+    axes[0].legend(loc="best", fontsize=9)
+    plt.suptitle("Actual vs. Predicted Variance (4 Assets)")
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.savefig(cov_plot_path, dpi=200)
+    plt.close()
+
+    print(f"Saved covariance variance comparison plot to: {cov_plot_path}")
+
+    # --------------------------------------------------------
+    # 2) Regularized differences of covariance matrices
+    # --------------------------------------------------------
+    ridge = 1e-6
+    diff_values = []
+
+    for d in cov_dates:
+        actual_cov = realized_cov_by_week[d] + ridge * np.eye(n_assets)
+        predicted_cov = Sigma_weekly_daily_cov[d] + ridge * np.eye(n_assets)
+        diff = actual_cov - predicted_cov
+        diff_values.append(np.linalg.norm(diff, ord="fro"))
+
+    diff_series = pd.Series(diff_values, index=cov_dates)
+
+    diff_plot_path = os.path.join(
+        output_dir, "covariance_regularized_diff.png"
+    )
+
+    plt.figure(figsize=(10, 4))
+    plt.plot(diff_series, linewidth=1.8, color="tab:purple")
+    plt.title("Regularized Frobenius Norm of Covariance Differences")
+    plt.xlabel("Date")
+    plt.ylabel("||Cov_realized - Cov_pred||")
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(diff_plot_path, dpi=200)
+    plt.close()
+
+    print(f"Saved covariance difference plot to: {diff_plot_path}")
+
+    # --------------------------------------------------------
+    # 3) Upward vs. downward regime correlation scatter
+    # --------------------------------------------------------
+    def mean_offdiag_corr(cov_mat, eps=1e-12):
+        std = np.sqrt(np.clip(np.diag(cov_mat), eps, None))
+        denom = np.outer(std, std)
+        corr = cov_mat / denom
+        mask = ~np.eye(corr.shape[0], dtype=bool)
+        return np.nanmean(corr[mask])
+
+    regime_rows = []
+
+    for i, rebalance_date in enumerate(cov_dates):
+        if i < len(cov_dates) - 1:
+            start = rebalance_date
+            end = cov_dates[i + 1]
+            daily_slice = benchmark_simple_returns.loc[start:end]
+        else:
+            daily_slice = benchmark_simple_returns.loc[rebalance_date:]
+
+        if daily_slice.empty:
+            continue
+
+        weekly_return = (1 + daily_slice).prod() - 1
+        regime = "Up" if weekly_return >= 0 else "Down"
+
+        realized_corr = mean_offdiag_corr(realized_cov_by_week[rebalance_date])
+        predicted_corr = mean_offdiag_corr(
+            Sigma_weekly_daily_cov[rebalance_date]
+        )
+
+        regime_rows.append(
+            {
+                "date": rebalance_date,
+                "regime": regime,
+                "realized_corr": realized_corr,
+                "predicted_corr": predicted_corr,
+            }
+        )
+
+    regime_df = pd.DataFrame(regime_rows)
+
+    if not regime_df.empty:
+        regime_plot_path = os.path.join(
+            output_dir, "regime_correlation_scatter.png"
+        )
+
+        plt.figure(figsize=(6, 6))
+        for regime, group in regime_df.groupby("regime"):
+            color = "tab:green" if regime == "Up" else "tab:red"
+            plt.scatter(
+                group["realized_corr"],
+                group["predicted_corr"],
+                label=regime,
+                alpha=0.8,
+                color=color,
+            )
+
+        min_corr = min(
+            regime_df["realized_corr"].min(),
+            regime_df["predicted_corr"].min(),
+        )
+        max_corr = max(
+            regime_df["realized_corr"].max(),
+            regime_df["predicted_corr"].max(),
+        )
+        plt.plot(
+            [min_corr, max_corr],
+            [min_corr, max_corr],
+            linestyle="--",
+            color="gray",
+            linewidth=1,
+        )
+
+        plt.title("Regime Correlation: Realized vs. Predicted")
+        plt.xlabel("Realized Mean Correlation")
+        plt.ylabel("Predicted Mean Correlation")
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(regime_plot_path, dpi=200)
+        plt.close()
+
+        print(f"Saved regime correlation plot to: {regime_plot_path}")
 
