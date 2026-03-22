@@ -1,104 +1,88 @@
-import numpy as np
-import matplotlib.pyplot as plt
-import yaml
+from __future__ import annotations
+
 import os
 
-from data.common import npz_string_list
+import matplotlib.pyplot as plt
+import numpy as np
+import yaml
+
+from data.common import npz_string_list, resolve_path
+
+
+def _default_prediction_path(base_dir: str, model_config: dict) -> str:
+    results_dir = resolve_path(base_dir, model_config["paths"]["results"])
+    candidates = [
+        os.path.join(results_dir, "latest", "returns", "predictions.npz"),
+        os.path.join(results_dir, "qnn_returns_angles_hybrid_rxrz_predictions.npz"),
+    ]
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            return candidate
+    raise FileNotFoundError("No returns prediction artifact found.")
+
 
 def plot_returns(
-    Y_true: np.ndarray,
-    Y_pred: np.ndarray,
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
     asset_idx: int = 0,
     asset_name: str | None = None,
     use_cumulative: bool = True,
-    show: bool = False
+    show: bool = False,
 ):
-    """
-    Plot actual vs predicted returns (or cumulative returns) for one asset.
-
-    Y_true, Y_pred: arrays of shape (T, n_assets)
-    asset_idx: index of the asset column to plot
-    use_cumulative: if True -> plot cumulative return path;
-                    if False -> plot raw daily log-returns.
-    """
-    assert Y_true.shape == Y_pred.shape, "Y_true and Y_pred shapes must match"
-    T, n_assets = Y_true.shape
+    assert y_true.shape == y_pred.shape, "Y_true and Y_pred shapes must match"
+    n_assets = y_true.shape[1]
     if not (0 <= asset_idx < n_assets):
-        raise ValueError(f"asset_idx must be in [0, {n_assets-1}]")
+        raise ValueError(f"asset_idx must be in [0, {n_assets - 1}]")
 
-    if asset_name is None:
-        asset_name = f"Asset {asset_idx}"
+    asset_name = asset_name or f"Asset {asset_idx}"
+    series_true = y_true[:, asset_idx]
+    series_pred = y_pred[:, asset_idx]
 
-    # extract series for this asset
-    r_true = Y_true[:, asset_idx]
-    r_pred = Y_pred[:, asset_idx]
-
-    with open('config/data_config.yaml', 'r') as f:
-        config = yaml.safe_load(f)
-    paths = config['paths']
+    with open("config/data_config.yaml", "r", encoding="utf-8") as handle:
+        data_config = yaml.safe_load(handle)
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    plots_dir = os.path.join(base_dir, paths['plots'], 'assets')
+    plots_dir = os.path.join(base_dir, data_config["paths"]["plots"], "assets")
     os.makedirs(plots_dir, exist_ok=True)
+
+    plt.figure(figsize=(10, 5))
+    x = np.arange(len(series_true))
     if use_cumulative:
-        # for log-returns, cumulative return = exp(sum r) - 1
-        cum_true = np.exp(np.cumsum(r_true)) - 1.0
-        cum_pred = np.exp(np.cumsum(r_pred)) - 1.0
-
-        x = np.arange(len(cum_true))
-
-        plt.figure(figsize=(10, 5))
-        plt.plot(x, cum_true, label="Actual cumulative return")
-        plt.plot(x, cum_pred, label="Predicted cumulative return", linestyle="--")
-        plt.xlabel("Test step")
+        plt.plot(x, np.exp(np.cumsum(series_true)) - 1.0, label="Actual cumulative return")
+        plt.plot(x, np.exp(np.cumsum(series_pred)) - 1.0, label="Predicted cumulative return", linestyle="--")
         plt.ylabel("Cumulative return")
-        plt.title(f"Cumulative returns path – {asset_name}")
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        path = os.path.join(plots_dir, f"cumulative_returns_asset_{asset_idx}.png")
-        plt.savefig(path)
-        if show:
-            plt.show()
+        filename = f"cumulative_returns_asset_{asset_idx}.png"
+        plt.title(f"Cumulative returns path - {asset_name}")
     else:
-        # raw daily log-returns
-        x = np.arange(len(r_true))
-
-        plt.figure(figsize=(10, 5))
-        plt.plot(x, r_true, label="Actual log-return")
-        plt.plot(x, r_pred, label="Predicted log-return", linestyle="--")
-        plt.xlabel("Test step")
+        plt.plot(x, series_true, label="Actual log-return")
+        plt.plot(x, series_pred, label="Predicted log-return", linestyle="--")
         plt.ylabel("Log-return")
-        plt.title(f"Daily log-returns -  {asset_name}")
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        path = os.path.join(plots_dir, f"log_returns_asset_{asset_idx}.png")
-        plt.savefig(path)
-        if show:
-            plt.show()
+        filename = f"log_returns_asset_{asset_idx}.png"
+        plt.title(f"Daily log-returns - {asset_name}")
+
+    plt.xlabel("Test step")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(os.path.join(plots_dir, filename), dpi=180)
+    if show:
+        plt.show()
+    plt.close()
+
 
 if __name__ == "__main__":
-    # path to your predictions file from the QNN script
-    with open('config/model_config.yaml', 'r') as f:
-        config = yaml.safe_load(f)
-    paths = config['paths']
+    with open("config/model_config.yaml", "r", encoding="utf-8") as handle:
+        model_config = yaml.safe_load(handle)
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    results_path = os.path.join(base_dir, paths['results'])
-    pred_path = os.path.join(results_path, "qnn_returns_angles_hybrid_rxrz_predictions.npz")
-
-    data = np.load(pred_path)
-    Y_true = data["Y_true_test"]   # shape: (T, n_assets)
-    Y_pred = data["Y_pred_test"]   # shape: (T, n_assets)
-
-    print("Y_true shape:", Y_true.shape)
-    print("Y_pred shape:", Y_pred.shape)
-
+    prediction_path = _default_prediction_path(base_dir, model_config)
+    data = np.load(prediction_path)
+    y_true = data["Y_true_test"]
+    y_pred = data["Y_pred_test"]
     assets = npz_string_list(data, "asset_symbols")
     if not assets:
-        with open('config/data_config.yaml', 'r') as f:
-            config = yaml.safe_load(f)
-        assets = sorted(config['assets'])
+        with open("config/data_config.yaml", "r", encoding="utf-8") as handle:
+            data_config = yaml.safe_load(handle)
+        assets = sorted(data_config["assets"])
 
-    for asset_idx, asset_name in enumerate(assets):
-        plot_returns(Y_true, Y_pred, asset_idx=asset_idx, asset_name=asset_name, use_cumulative=True)       
-        plot_returns(Y_true, Y_pred, asset_idx=asset_idx, asset_name=asset_name, use_cumulative=False)
+    for idx, asset in enumerate(assets):
+        plot_returns(y_true, y_pred, asset_idx=idx, asset_name=asset, use_cumulative=True)
+        plot_returns(y_true, y_pred, asset_idx=idx, asset_name=asset, use_cumulative=False)

@@ -1,4 +1,244 @@
 paths:
   models: qnn/models
   results: qnn/results
-  plots: qnn/plots  
+  plots: qnn/plots
+  optuna: qnn/results/optuna
+  backtests: Optimizer/backtest_results
+
+runtime:
+  profile: realism
+  primitive: auto
+  shots: 2048
+  validation_shots: 4096
+  evaluation_repeats: 3
+  method: automatic
+  device: auto
+  precision: double
+  seed: 42
+  gradient: auto
+  input_gradients: true
+  default_precision: 0.015625
+  skip_transpilation: false
+  max_parallel_threads: 0
+  max_parallel_experiments: 0
+  max_parallel_shots: 0
+  max_job_size: null
+  max_shot_size: null
+  target_gpus: []
+  use_gpu_if_available: true
+
+noise:
+  enabled: false
+  family: none
+  single_qubit_prob: 0.001
+  two_qubit_prob: 0.01
+  readout_prob: 0.01
+  t1: 100000.0
+  t2: 80000.0
+  gate_time_1q: 50.0
+  gate_time_2q: 300.0
+  excited_population: 0.0
+  backend_name: null
+
+resources:
+  prefer_cuda: true
+  torch_threads: 0
+  dataloader_workers: 0
+  pin_memory: true
+  optuna_jobs: 1
+
+model:
+  feature_mode: angles
+  circuit_type: rxrz
+  entanglement: ring
+  n_qubits: 6
+  n_layers: 4
+  use_dense_head: true
+  dense_hidden_dims:
+    - 32
+    - 16
+  initial_weight_scale: 0.1
+  seed: 42
+
+training:
+  data_config_path: config/data_config.yaml
+  dataset_frequency: weekly
+  npz_name: null
+  batch_size: 32
+  n_epochs: 30
+  optimizer_name: adam
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  gradient_clip_norm: 1.0
+  normalize_targets: true
+  early_stopping_patience: 8
+  early_stopping_min_delta: 0.0001
+  validation_smoothing_alpha: 0.3
+  min_epochs_before_stop: 5
+  objective_metric: rmse
+  save_trial_artifacts: false
+
+loss:
+  name: huber
+  delta: 0.05
+
+scheduler:
+  name: plateau
+  factor: 0.5
+  patience: 3
+  min_lr: 0.00001
+  t_max: 20
+
+metrics:
+  sensitivity_eps: 0.001
+  sensitivity_samples: 32
+  save_prediction_samples: false
+  save_metrics: true
+  save_summary: true
+  save_model: true
+  save_predictions: true
+  latest_dirname: latest
+  runs_dirname: runs
+
+plots:
+  enabled: true
+  include_circuit: true
+  max_assets: 6
+  rolling_window: 5
+  dpi: 180
+
+tuning:
+  enabled: false
+  n_trials: 20
+  n_jobs: 1
+  timeout_seconds: null
+  study_name: null
+  direction: minimize
+  metric: rmse
+  storage: null
+  save_trial_artifacts: false
+  search_space:
+    model.n_qubits:
+      type: int
+      low: 4
+      high: 7
+    model.n_layers:
+      type: int
+      low: 2
+      high: 6
+    model.feature_mode:
+      type: categorical
+      choices:
+        - angles
+        - pca
+    model.use_dense_head:
+      type: categorical
+      choices:
+        - true
+        - false
+    model.circuit_type:
+      type: categorical
+      choices:
+        - rxrz
+        - zz_feature
+    model.entanglement:
+      type: categorical
+      choices:
+        - ring
+        - linear
+    training.learning_rate:
+      type: float
+      low: 0.0001
+      high: 0.005
+      log: true
+    training.batch_size:
+      type: categorical
+      choices:
+        - 16
+        - 32
+        - 64
+    loss.name:
+      type: categorical
+      choices:
+        - huber
+        - mse
+        - mae
+        - log_cosh
+    runtime.profile:
+      type: categorical
+      choices:
+        - realism
+        - balanced
+        - fast_exact
+    noise.family:
+      type: categorical
+      choices:
+        - none
+        - depolarizing
+        - readout
+        - thermal_relaxation
+  mode_search_space:
+    cov:
+      loss.delta:
+        type: float
+        low: 0.01
+        high: 0.2
+      runtime.shots:
+        type: categorical
+        choices:
+          - 1024
+          - 2048
+          - 4096
+    returns:
+      loss.delta:
+        type: float
+        low: 0.01
+        high: 0.1
+      runtime.shots:
+        type: categorical
+        choices:
+          - 512
+          - 1024
+          - 2048
+
+optimizer:
+  objective: mean_variance
+  solver: auto
+  risk_aversion: 1.0
+  return_weight: 1.0
+  target_return: null
+  weight_max: 0.35
+  long_only: true
+  l2_reg: 0.001
+  turnover_penalty: 0.05
+  max_iter: 500
+  step_size: 0.05
+  benchmark: equal_weight
+
+experiments:
+  returns:
+    model:
+      feature_mode: angles
+      circuit_type: rxrz
+      entanglement: ring
+      n_qubits: 6
+      n_layers: 4
+      use_dense_head: true
+    training:
+      objective_metric: rmse
+    loss:
+      name: huber
+      delta: 0.04
+  cov:
+    model:
+      feature_mode: pca
+      circuit_type: rxrz
+      entanglement: ring
+      n_qubits: 7
+      n_layers: 4
+      use_dense_head: true
+    training:
+      objective_metric: rmse
+    loss:
+      name: huber
+      delta: 0.08
