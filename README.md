@@ -113,13 +113,17 @@ python data/data_pipeline.py
 
 This script:
 
-- deletes `data/raw/`
-- deletes `data/processed/`
 - runs `data/fetch.py`
 - runs `data/preprocess.py`
-- runs `data/datasets.py`
+- runs `data/datasets.py` and/or `data/datasets_weekly.py`
 
-Use this only if you want to rebuild the daily dataset flow from scratch.
+Supported modes:
+
+- `python data/data_pipeline.py --mode daily`
+- `python data/data_pipeline.py --mode weekly`
+- `python data/data_pipeline.py --mode both`
+
+Default mode is `both`.
 
 ### Option 2: Run each step manually
 
@@ -153,9 +157,9 @@ python data/datasets.py
 
 Expected outputs:
 
-- `data/processed/qnn_datasets.npz`
-- `data/processed/scalers/qnn_cov_scaler.joblib`
-- `data/processed/scalers/qnn_ret_scaler.joblib`
+- `data/processed/qnn_datasets_daily.npz`
+- `data/processed/scalers/qnn_cov_scaler_daily.joblib`
+- `data/processed/scalers/qnn_ret_scaler_daily.joblib`
 
 Create the weekly datasets used by the backtesting logic:
 
@@ -163,10 +167,17 @@ Create the weekly datasets used by the backtesting logic:
 python data/datasets_weekly.py
 ```
 
-This script writes the same output filename, `data/processed/qnn_datasets.npz`, but with weekly targets:
+Expected outputs:
+
+- `data/processed/qnn_datasets_weekly.npz`
+- `data/processed/scalers/qnn_cov_scaler_weekly.joblib`
+- `data/processed/scalers/qnn_ret_scaler_weekly.joblib`
+
+This weekly dataset bundle contains:
 
 - next-week aggregated log returns
 - next-week realized covariance built from daily returns within the following week
+- metadata including `asset_symbols`, `sample_dates_*`, `target_frequency`, `lookback`, `cov_window`, and `train_ratio`
 
 If you plan to evaluate the optimizer/backtest flow, this weekly dataset builder is the relevant one.
 
@@ -280,7 +291,8 @@ wutis_quantum_to_quantum/
 │   │   ├── tickers/                   # Per-symbol CSVs fetched from Alpaca
 │   │   └── merged_data.csv            # Merged panel after preprocessing
 │   └── processed/
-│       ├── qnn_datasets.npz           # Latest dataset bundle used by training
+│       ├── qnn_datasets_daily.npz     # Explicit daily dataset bundle
+│       ├── qnn_datasets_weekly.npz    # Explicit weekly dataset bundle
 │       └── scalers/                   # Saved scalers for returns and covariance inputs
 ├── qnn/
 │   ├── encode.py                      # Feature compression / PCA to qubit-sized inputs
@@ -313,7 +325,8 @@ Not shown above:
 The repository currently contains generated outputs in addition to source code, including:
 
 - `data/raw/merged_data.csv`
-- `data/processed/qnn_datasets.npz`
+- `data/processed/qnn_datasets_daily.npz`
+- `data/processed/qnn_datasets_weekly.npz`
 - plots under `analysis/plots/`
 - predictions under `Optimizer/prediction data/`
 - backtest figures under `Optimizer/backtest results/`
@@ -327,8 +340,6 @@ This means the repository is usable both as:
 
 ## Current Caveats
 
-- There is no automated test suite in the repository at the moment.
-- Several scripts rely on hard-coded filenames rather than a single artifact registry.
-- `data/data_pipeline.py` rebuilds the daily dataset flow, not the weekly dataset flow.
+- `Optimizer/backtest.py` still reads prediction artifacts from hard-coded paths under `Optimizer/prediction data/`.
 - `qnn/train.py` stores model weights in `qnn/results/` even though `config/model_config.yaml` also defines `qnn/models/`.
-- `Optimizer/backtest.py` assumes prediction files already exist in `Optimizer/prediction data/`.
+- The project now has data-layer regression tests, but it still does not have a broader application-level test suite.

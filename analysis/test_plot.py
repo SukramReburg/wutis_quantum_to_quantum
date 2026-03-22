@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import yaml
 import os
 
+from data.common import npz_string_list
+
 def plot_returns(
     Y_true: np.ndarray,
     Y_pred: np.ndarray,
@@ -82,7 +84,7 @@ if __name__ == "__main__":
     paths = config['paths']
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     results_path = os.path.join(base_dir, paths['results'])
-    pred_path = os.path.join(results_path, "qnn_torch_returns_angles_hybrid_predictions.npz")
+    pred_path = os.path.join(results_path, "qnn_returns_angles_hybrid_rxrz_predictions.npz")
 
     data = np.load(pred_path)
     Y_true = data["Y_true_test"]   # shape: (T, n_assets)
@@ -91,9 +93,11 @@ if __name__ == "__main__":
     print("Y_true shape:", Y_true.shape)
     print("Y_pred shape:", Y_pred.shape)
 
-    with open('config/data_config.yaml', 'r') as f:
-        config = yaml.safe_load(f)
-    assets = config['assets']
+    assets = npz_string_list(data, "asset_symbols")
+    if not assets:
+        with open('config/data_config.yaml', 'r') as f:
+            config = yaml.safe_load(f)
+        assets = sorted(config['assets'])
 
     for asset_idx, asset_name in enumerate(assets):
         plot_returns(Y_true, Y_pred, asset_idx=asset_idx, asset_name=asset_name, use_cumulative=True)       

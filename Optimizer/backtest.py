@@ -6,6 +6,7 @@ from KPIs import *
 import matplotlib.pyplot as plt
 import os
 
+from data.common import npz_string_list, npz_scalar
 
 
 ### NOTE: ALL IN LOG RETURNS ### 
@@ -20,7 +21,7 @@ data = pd.read_csv("data/raw/merged_data.csv", index_col="timestamp", parse_date
 ret_cols = [c for c in data.columns if c.endswith("_log")]
 log_ret_daily = data[ret_cols].dropna()
 
-# Get correct order of the symbols - ensure sorted like qnn
+# Default sorted symbol order from the merged data. Prediction metadata can override it.
 symbols_all = sorted({c.split('_')[0] for c in ret_cols})
 
 # Normalized column names for log returns
@@ -37,6 +38,15 @@ weekly_ends = log_ret_daily.resample("W-FRI").last().index
 # Rebuild ALL covariance matrices - from predictions
 # ============================================================
 cov_preds = np.load("Optimizer/prediction data/qnn_cov_pca_hybrid_rxrz_predictions.npz") 
+
+cov_symbols = npz_string_list(cov_preds, "asset_symbols")
+if cov_symbols:
+    symbols_all = cov_symbols
+
+cov_sample_dates = npz_string_list(cov_preds, "sample_dates") or npz_string_list(cov_preds, "sample_dates_test")
+cov_frequency = npz_scalar(cov_preds, "target_frequency")
+if cov_frequency is not None and str(cov_frequency) != "weekly":
+    raise ValueError(f"Expected weekly covariance predictions, got '{cov_frequency}'.")
 
 # Shape: (T, n_assets*(n_assets+1)//2)
 Y_cov = cov_preds["Y_pred_test"]
@@ -71,6 +81,19 @@ print("Len Symbols: ", len(symbols_all))
 # ============================================================
 data = np.load("Optimizer/prediction data/qnn_returns_angles_hybrid_rxrz_predictions.npz") # update
 
+ret_symbols = npz_string_list(data, "asset_symbols")
+if ret_symbols and ret_symbols != symbols_all:
+    raise ValueError("Returns and covariance prediction artifacts use different asset orders.")
+
+ret_sample_dates = npz_string_list(data, "sample_dates") or npz_string_list(data, "sample_dates_test")
+ret_frequency = npz_scalar(data, "target_frequency")
+if ret_frequency is not None and str(ret_frequency) != "weekly":
+    raise ValueError(f"Expected weekly returns predictions, got '{ret_frequency}'.")
+
+log_ret_daily_named = log_ret_daily.copy()
+log_ret_daily_named.columns = [c.replace("_log", "") for c in log_ret_daily_named.columns]
+log_ret_daily_named = log_ret_daily_named[symbols_all]
+
 # extract test
 mu_log = data["Y_pred_test"]
 
@@ -82,13 +105,13 @@ mu = np.expm1(mu_log)
 # Align weekly data 
 # ============================================================
 
-log_ret_weekly = log_ret_daily.resample("W-FRI").sum()
-
-# number of weekly predictions
-T = mu.shape[0]  
-
-# dates corresponding to weekly rebalancing
-weekly_dates = log_ret_weekly.index[-T:]
+if ret_sample_dates:
+    weekly_dates = pd.DatetimeIndex(pd.to_datetime(ret_sample_dates))
+elif cov_sample_dates:
+    weekly_dates = pd.DatetimeIndex(pd.to_datetime(cov_sample_dates))
+else:
+    log_ret_weekly = log_ret_daily.resample("W-FRI").sum()
+    weekly_dates = log_ret_weekly.index[-mu.shape[0]:]
 
 # Safety check
 assert len(weekly_dates) == mu.shape[0] == Sigma_psd_all.shape[0]
@@ -590,4 +613,3 @@ if len(cov_dates) > 0:
         plt.close()
 
         print(f"Saved regime correlation plot to: {regime_plot_path}")
-

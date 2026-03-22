@@ -1,52 +1,49 @@
-import subprocess
-import sys
-import os 
-import yaml 
-import shutil
+from __future__ import annotations
 
-SCRIPTS = [
-    "data/fetch.py",
-    "data/preprocess.py",
-    "data/datasets.py",
-]
+import argparse
 
-
-def run_script(script):
-    print(f"\n=== Running: {script} ===")
-    result = subprocess.run([sys.executable, script])
-    if result.returncode != 0:
-        print(f"❌ Error in {script}")
-        sys.exit(result.returncode)
-    else:
-        print(f"✅ Finished: {script}")
+try:
+    from .datasets import save_dataset_bundle_from_config as save_daily_dataset_bundle
+    from .datasets_weekly import save_dataset_bundle_from_config as save_weekly_dataset_bundle
+    from .fetch import fetch_and_save_data
+    from .preprocess import preprocess_and_save_data
+except ImportError:
+    from datasets import save_dataset_bundle_from_config as save_daily_dataset_bundle
+    from datasets_weekly import save_dataset_bundle_from_config as save_weekly_dataset_bundle
+    from fetch import fetch_and_save_data
+    from preprocess import preprocess_and_save_data
 
 
-if __name__ == "__main__": 
-    with open('config/data_config.yaml', 'r') as f:
-        config = yaml.safe_load(f)
+def parse_args():
+    parser = argparse.ArgumentParser(description="Run the market data pipeline.")
+    parser.add_argument(
+        "--mode",
+        choices=["daily", "weekly", "both"],
+        default="both",
+        help="Select which dataset artifacts to generate after fetch and preprocess.",
+    )
+    return parser.parse_args()
 
-    
-    paths = config['paths']
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    raw = os.path.join(base_dir, paths['raw'])
-    processed = os.path.join(base_dir, paths['processed'])
 
-    try:
-        shutil.rmtree(raw)
-        print("\nRemoved raw data directory.")
-    except OSError as error:
-        pass
-        print("Raw data directory not removed.")
-    try:
-        shutil.rmtree(processed)
-        print("Removed processed data directory.")
-    except OSError as error:
-        pass
-        print("Processed data directory not removed.")
+def main():
+    args = parse_args()
 
-    print("\n🚀 Starting Data Pipeline...\n")
+    print("\n=== Fetching raw market data ===")
+    fetch_and_save_data()
 
-    for script in SCRIPTS:
-        run_script(script)
+    print("\n=== Preprocessing raw market data ===")
+    preprocess_and_save_data()
+
+    if args.mode in {"daily", "both"}:
+        print("\n=== Building daily datasets ===")
+        save_daily_dataset_bundle()
+
+    if args.mode in {"weekly", "both"}:
+        print("\n=== Building weekly datasets ===")
+        save_weekly_dataset_bundle()
 
     print("\nFULL DATA PIPELINE COMPLETE\n")
+
+
+if __name__ == "__main__":
+    main()

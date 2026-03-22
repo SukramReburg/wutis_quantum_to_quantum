@@ -12,11 +12,24 @@ from torch.utils.data import TensorDataset, DataLoader
 import matplotlib.pyplot as plt
 import yaml
 
-from encode import transform_features
-from model import (build_estimator_qnn,
-                       build_rxrz_qnn,
-                       HybridQNNModel,
-                       visualise_circuit)
+from data.common import WEEKLY_DATASET_FILENAME, npz_scalar, npz_string_list
+
+try:
+    from .encode import transform_features
+    from .model import (
+        HybridQNNModel,
+        build_estimator_qnn,
+        build_rxrz_qnn,
+        visualise_circuit,
+    )
+except ImportError:
+    from encode import transform_features
+    from model import (
+        HybridQNNModel,
+        build_estimator_qnn,
+        build_rxrz_qnn,
+        visualise_circuit,
+    )
 # ======================================================================
 # CONFIG / PATHS
 # ======================================================================
@@ -54,6 +67,7 @@ def train_qnn(
     entanglement: str = "ring",  # for rxrz QNN
     learning_curve_png_path: Optional[str] = None,
     model_save_path: Optional[str] = None,
+    prediction_metadata: Optional[dict] = None,
 ):
     """
     Train a QNN with PyTorch and optionally save artifacts.
@@ -166,11 +180,13 @@ def train_qnn(
         directory = os.path.dirname(pred_save_path)
         if directory != "":
             os.makedirs(directory, exist_ok=True)
-        np.savez_compressed(
-            pred_save_path,
-            Y_pred_test=Y_pred_test,
-            Y_true_test=Y_test,
-        )
+        payload = {
+            "Y_pred_test": Y_pred_test,
+            "Y_true_test": Y_test,
+        }
+        if prediction_metadata:
+            payload.update(prediction_metadata)
+        np.savez_compressed(pred_save_path, **payload)
         print(f"Saved predictions to {pred_save_path}")
 
     # Plot learning curves (train/test MSE)
@@ -219,7 +235,7 @@ def train_qnn_from_npz(
     n_layers: int = 2,
     feature_mode: str = "angles",   # 'angles' or 'pca'
     use_dense_head: bool = True,    # True=hybrid, False=pure
-    npz_name: str = "qnn_datasets.npz",
+    npz_name: str = WEEKLY_DATASET_FILENAME,
     n_epochs: int = 50,
     batch_size: int = 32,
     learning_rate: float = 1e-3,
@@ -232,25 +248,46 @@ def train_qnn_from_npz(
     save_artifacts: bool = True,             # False = no png/npz/pth (for Optuna)
 ):
     """
-    Loads your saved qnn_datasets.npz and trains a PyTorch-based QNN model
+    Loads a saved dataset bundle and trains a PyTorch-based QNN model
     for either 'returns' or 'cov'.
     """
     _, base_dir, dataset_path = load_paths_from_config(config_path)
     npz_path = os.path.join(dataset_path, npz_name)
     data = np.load(npz_path)
 
+    sample_dates_key = None
     if mode == "returns":
         X_train_raw = data["X_train_ret"]
         X_test_raw = data["X_test_ret"]
         Y_train = data["Y_train_ret"]
         Y_test = data["Y_test_ret"]
+        sample_dates_key = "sample_dates_ret"
     elif mode == "cov":
         X_train_raw = data["X_train_cov"]
         X_test_raw = data["X_test_cov"]
         Y_train = data["Y_train_cov"]
         Y_test = data["Y_test_cov"]
+        sample_dates_key = "sample_dates_cov"
     else:
         raise ValueError("mode must be 'returns' or 'cov'.")
+
+    asset_symbols = npz_string_list(data, "asset_symbols")
+    sample_dates = npz_string_list(data, sample_dates_key) or npz_string_list(data, "sample_dates")
+    if sample_dates and len(sample_dates) != len(Y_train) + len(Y_test):
+        raise ValueError(
+            f"{sample_dates_key} length does not match train/test splits for mode '{mode}'."
+        )
+
+    prediction_metadata = {}
+    if asset_symbols:
+        prediction_metadata["asset_symbols"] = np.asarray(asset_symbols, dtype=str)
+    if sample_dates:
+        prediction_metadata["sample_dates"] = np.asarray(sample_dates[-len(Y_test):], dtype=str)
+        prediction_metadata["sample_dates_test"] = np.asarray(sample_dates[-len(Y_test):], dtype=str)
+
+    target_frequency = npz_scalar(data, "target_frequency")
+    if target_frequency is not None:
+        prediction_metadata["target_frequency"] = np.asarray(str(target_frequency), dtype=str)
 
     print(
         f"[{mode}] training PyTorch QNN, "
@@ -260,7 +297,7 @@ def train_qnn_from_npz(
     )
 
     # results path from model_config
-    model_config_path = "config/model_config.yaml"
+    model_config_path = os.path.join(base_dir, "config", "model_config.yaml")
     with open(model_config_path, "r") as f:
         model_config = yaml.safe_load(f)
     paths = model_config["paths"]
@@ -308,6 +345,7 @@ def train_qnn_from_npz(
         circuit_type=circuit_type,
         learning_curve_png_path=learning_curve_png_path,
         model_save_path=model_save_path,
+        prediction_metadata=prediction_metadata,
     )
 
     return result
@@ -348,4 +386,3 @@ if __name__ == "__main__":
         circuit_type="rxrz",
         save_artifacts=True,
     )
-

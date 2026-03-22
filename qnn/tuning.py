@@ -5,6 +5,7 @@ Includes Optuna hyperparameter tuning over:
 """
 from typing import Optional
 import optuna
+from data.common import WEEKLY_DATASET_FILENAME
 from qnn.train import train_qnn_from_npz
 
 # ======================================================================
@@ -13,7 +14,7 @@ from qnn.train import train_qnn_from_npz
 def create_optuna_objective(
     config_path: str,
     mode: str,
-    npz_name: str = "qnn_datasets.npz",
+    npz_name: str = WEEKLY_DATASET_FILENAME,
     n_epochs: int = 10,
 ):
     """
@@ -63,7 +64,7 @@ def create_optuna_objective(
 def run_optuna_study(
     config_path: str,
     mode: str,
-    npz_name: str = "qnn_datasets.npz",
+    npz_name: str = WEEKLY_DATASET_FILENAME,
     n_trials: int = 30,
     n_epochs: int = 10,
     study_name: Optional[str] = None,
@@ -103,7 +104,7 @@ if __name__ == "__main__":
     _ = run_optuna_study(
         config_path="config/data_config.yaml",
         mode="returns",
-        npz_name="qnn_datasets.npz",
+        npz_name=WEEKLY_DATASET_FILENAME,
         n_trials=10,          # increase to 50–100 for real tuning
         n_epochs=10,          # smaller epochs for tuning
         study_name="qnn_returns_demo",
