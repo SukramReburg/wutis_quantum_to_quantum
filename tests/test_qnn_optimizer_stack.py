@@ -8,9 +8,11 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from Optimizer.bundle import PredictionBundle
-from Optimizer.engine import BacktestEngine
-from Optimizer.portfolio import PortfolioOptimizer, PortfolioOptimizerConfig
+from optimizer.bundle import PredictionBundle
+from optimizer.engine import BacktestEngine
+from optimizer.portfolio import PortfolioOptimizer, PortfolioOptimizerConfig
+from analysis.common import AnalysisPathManager
+from qnn.artifacts import ArtifactManager
 from qnn.config import NoiseConfig, RuntimeConfig, load_experiment_config
 from qnn.losses import regression_metrics
 from qnn.metrics import QNNMetricsCollector
@@ -25,6 +27,8 @@ class QNNOptimizerStackTests(unittest.TestCase):
         cov_cfg = load_experiment_config(mode="cov", config_path="config/model_config.yaml")
 
         self.assertEqual(returns_cfg.runtime.profile, "realism")
+        self.assertEqual(returns_cfg.paths.plots, "analysis/plots")
+        self.assertEqual(returns_cfg.paths.reports, "analysis/reports")
         self.assertEqual(returns_cfg.model.feature_mode, "angles")
         self.assertEqual(cov_cfg.model.feature_mode, "pca")
         self.assertEqual(cov_cfg.model.n_qubits, 7)
@@ -33,6 +37,14 @@ class QNNOptimizerStackTests(unittest.TestCase):
         cov_space = study_runner._search_space("cov")
         self.assertIn("runtime.profile", cov_space)
         self.assertIn("loss.delta", cov_space)
+
+        analysis_paths = AnalysisPathManager.from_configs()
+        model_location = analysis_paths.model("returns")
+        self.assertTrue(model_location.plots_dir.endswith("analysis/plots/models/returns/latest"))
+
+        artifacts = ArtifactManager(returns_cfg).prepare("returns", run_tag="unit_test")
+        self.assertTrue(artifacts.archive.plots_dir.endswith("analysis/plots/models/returns/runs/unit_test"))
+        self.assertTrue(artifacts.latest.plots_dir.endswith("analysis/plots/models/returns/latest"))
 
     def test_runtime_and_noise_selection_are_config_driven(self):
         runtime = RuntimeConfig(device="auto", use_gpu_if_available=True)
@@ -132,10 +144,10 @@ class QNNOptimizerStackTests(unittest.TestCase):
                     {
                         "paths": {
                             "results": "qnn/results",
-                            "plots": "qnn/plots",
+                            "plots": "analysis/plots",
+                            "reports": "analysis/reports",
                             "models": "qnn/models",
                             "optuna": "qnn/results/optuna",
-                            "backtests": "Optimizer/backtest_results",
                         },
                         "training": {"data_config_path": "config/data_config.yaml"},
                         "optimizer": {

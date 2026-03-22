@@ -14,13 +14,17 @@ from .engine import BacktestResult
 
 
 class BacktestReporter:
-    def __init__(self, output_dir: str, dpi: int = 180):
-        self.output_dir = output_dir
+    """Writes optimizer diagnostics into separate plot and report folders."""
+
+    def __init__(self, plots_dir: str, reports_dir: str, dpi: int = 180):
+        self.plots_dir = plots_dir
+        self.reports_dir = reports_dir
         self.dpi = dpi
-        os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(plots_dir, exist_ok=True)
+        os.makedirs(reports_dir, exist_ok=True)
 
     def _save(self, filename: str) -> str:
-        path = os.path.join(self.output_dir, filename)
+        path = os.path.join(self.plots_dir, filename)
         plt.tight_layout()
         plt.savefig(path, dpi=self.dpi)
         plt.close()
@@ -36,13 +40,13 @@ class BacktestReporter:
         }
 
     def save(self, result: BacktestResult) -> dict[str, str]:
-        with open(os.path.join(self.output_dir, "summary.json"), "w", encoding="utf-8") as handle:
+        with open(os.path.join(self.reports_dir, "summary.json"), "w", encoding="utf-8") as handle:
             json.dump(self._summary_payload(result), handle, indent=2, sort_keys=True)
-        result.weights.to_csv(os.path.join(self.output_dir, "weights.csv"))
-        result.diagnostics.to_csv(os.path.join(self.output_dir, "diagnostics.csv"))
+        result.weights.to_csv(os.path.join(self.reports_dir, "weights.csv"))
+        result.diagnostics.to_csv(os.path.join(self.reports_dir, "diagnostics.csv"))
 
         outputs = {}
-        outputs["summary"] = os.path.join(self.output_dir, "summary.json")
+        outputs["summary"] = os.path.join(self.reports_dir, "summary.json")
 
         qnn_equity = (1.0 + result.portfolio_simple_returns).cumprod()
         benchmark_equity = (1.0 + result.benchmark_simple_returns).cumprod()

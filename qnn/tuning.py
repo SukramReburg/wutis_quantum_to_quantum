@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import os
+import sys
 
-try:
-    from .study import QNNStudyRunner
-except ImportError:
-    from qnn.study import QNNStudyRunner
+if __package__ in {None, ""}:
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from qnn.study import QNNStudyRunner
 
 
 def parse_args() -> argparse.Namespace:

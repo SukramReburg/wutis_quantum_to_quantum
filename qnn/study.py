@@ -10,6 +10,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from analysis.common import AnalysisPathManager
 from data.common import project_base_dir, resolve_path
 
 try:
@@ -110,7 +111,7 @@ class QNNStudyRunner:
         os.makedirs(path, exist_ok=True)
         return path
 
-    def _save_study_artifacts(self, study, output_dir: str) -> None:
+    def _save_study_artifacts(self, study, output_dir: str, plots_dir: str) -> None:
         dataframe = study.trials_dataframe()
         dataframe.to_csv(os.path.join(output_dir, "trials.csv"), index=False)
 
@@ -136,7 +137,8 @@ class QNNStudyRunner:
         plt.title("Optuna Trial History")
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, "history.png"), dpi=180)
+        os.makedirs(plots_dir, exist_ok=True)
+        plt.savefig(os.path.join(plots_dir, "history.png"), dpi=180)
         plt.close()
 
         if get_param_importances is not None:
@@ -149,7 +151,7 @@ class QNNStudyRunner:
                 plt.xlabel("Importance")
                 plt.title("Parameter Importance")
                 plt.tight_layout()
-                plt.savefig(os.path.join(output_dir, "param_importance.png"), dpi=180)
+                plt.savefig(os.path.join(plots_dir, "param_importance.png"), dpi=180)
                 plt.close()
 
     def run(
@@ -182,5 +184,10 @@ class QNNStudyRunner:
         )
 
         output_dir = self._study_output_dir(study_name)
-        self._save_study_artifacts(study, output_dir)
+        plots_dir = AnalysisPathManager(
+            self.base_dir,
+            plots_root=self.project_config["paths"]["plots"],
+            reports_root=self.project_config["paths"].get("reports", "analysis/reports"),
+        ).tuning(study_name).plots_dir
+        self._save_study_artifacts(study, output_dir, plots_dir)
         return study

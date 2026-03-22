@@ -13,7 +13,7 @@ try:
 except ModuleNotFoundError:
     plt = None
 
-from Optimizer.reconstruct_cov import make_psd, rebuild_covariance
+from optimizer.reconstruct_cov import make_psd, rebuild_covariance
 
 
 def _ensure_matplotlib():

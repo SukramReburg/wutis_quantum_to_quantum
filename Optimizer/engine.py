@@ -51,14 +51,14 @@ class BacktestEngine:
             candidates.extend(
                 [
                     os.path.join(results_root, "qnn_returns_angles_hybrid_rxrz_predictions.npz"),
-                    os.path.join(self.base_dir, "Optimizer", "prediction data", "qnn_returns_angles_hybrid_rxrz_predictions.npz"),
+                    os.path.join(self.base_dir, "optimizer", "prediction data", "qnn_returns_angles_hybrid_rxrz_predictions.npz"),
                 ]
             )
         else:
             candidates.extend(
                 [
                     os.path.join(results_root, "qnn_cov_pca_hybrid_rxrz_predictions.npz"),
-                    os.path.join(self.base_dir, "Optimizer", "prediction data", "qnn_cov_pca_hybrid_rxrz_predictions.npz"),
+                    os.path.join(self.base_dir, "optimizer", "prediction data", "qnn_cov_pca_hybrid_rxrz_predictions.npz"),
                 ]
             )
         for candidate in candidates:

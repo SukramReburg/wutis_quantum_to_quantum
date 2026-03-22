@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import os
+import sys
 
-try:
-    from .config import load_experiment_config
-    from .trainer import QNNTrainer, train_qnn_from_npz
-except ImportError:
-    from qnn.config import load_experiment_config
-    from qnn.trainer import QNNTrainer, train_qnn_from_npz
+if __package__ in {None, ""}:
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from qnn.config import load_experiment_config
+from qnn.trainer import QNNTrainer, train_qnn_from_npz
 
 
 def parse_args() -> argparse.Namespace:

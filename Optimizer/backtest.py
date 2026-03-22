@@ -2,16 +2,15 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 
-from data.common import resolve_path
+if __package__ in {None, ""}:
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from analysis.common import AnalysisPathManager
 from qnn.config import load_project_config
-
-try:
-    from .engine import BacktestEngine
-    from .reporting import BacktestReporter
-except ImportError:
-    from Optimizer.engine import BacktestEngine
-    from Optimizer.reporting import BacktestReporter
+from optimizer.engine import BacktestEngine
+from optimizer.reporting import BacktestReporter
 
 
 def parse_args() -> argparse.Namespace:
@@ -37,9 +36,18 @@ def main() -> None:
         print(f"{key:>15}: {value:.4f}")
 
     if not args.no_plots:
-        output_dir = resolve_path(engine.base_dir, project_config["paths"]["backtests"])
-        outputs = BacktestReporter(output_dir=output_dir).save(result)
-        print(f"\nSaved backtest artifacts to {output_dir}")
+        path_manager = AnalysisPathManager(
+            engine.base_dir,
+            plots_root=project_config["paths"]["plots"],
+            reports_root=project_config["paths"].get("reports", "analysis/reports"),
+        )
+        location = path_manager.optimizer()
+        outputs = BacktestReporter(
+            plots_dir=location.plots_dir,
+            reports_dir=location.reports_dir,
+        ).save(result)
+        print(f"\nSaved backtest plots to {location.plots_dir}")
+        print(f"Saved backtest reports to {location.reports_dir}")
         for key, value in outputs.items():
             print(f"  {key}: {value}")
 

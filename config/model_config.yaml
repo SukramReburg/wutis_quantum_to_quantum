@@ -1,9 +1,9 @@
 paths:
   models: qnn/models
   results: qnn/results
-  plots: qnn/plots
+  plots: analysis/plots
+  reports: analysis/reports
   optuna: qnn/results/optuna
-  backtests: Optimizer/backtest_results
 
 runtime:
   profile: realism
@@ -12,15 +12,15 @@ runtime:
   validation_shots: 4096
   evaluation_repeats: 3
   method: automatic
-  device: auto
+  device: CPU
   precision: double
   seed: 42
   gradient: auto
   input_gradients: true
   default_precision: 0.015625
   skip_transpilation: false
-  max_parallel_threads: 0
-  max_parallel_experiments: 0
+  max_parallel_threads: 10
+  max_parallel_experiments: 1
   max_parallel_shots: 0
   max_job_size: null
   max_shot_size: null
@@ -41,7 +41,7 @@ noise:
   backend_name: null
 
 resources:
-  prefer_cuda: true
+  prefer_cuda: false
   torch_threads: 0
   dataloader_workers: 0
   pin_memory: true

@@ -1,25 +1,14 @@
-import yaml 
-import os 
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
+from __future__ import annotations
+
+import os
+import sys
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from analysis.data_report import MarketDataInvestigator
+
 
 if __name__ == "__main__":
-    with open('config/data_config.yaml', 'r') as f:
-        config = yaml.safe_load(f)
-    paths = config['paths']
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-    merged_save_path = os.path.join(base_dir, paths['raw'], 'merged_data.csv')
-    merged_df = pd.read_csv(merged_save_path, index_col='timestamp', parse_dates=True)
-    log_cols = [col for col in merged_df.columns if 'log' in col]
-    cov_matrix = merged_df[log_cols].cov()
-    plt.figure(figsize=(12,10))
-    sns.heatmap(cov_matrix, annot=False, cmap='coolwarm')
-    plt.title('Log Returns Covariance Matrix')
-    plt.tight_layout()
-    path = os.path.join(base_dir, paths['plots'], 'log_returns_cov_matrix.png')
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    plt.savefig(path)
-    plt.show()
-
+    location = MarketDataInvestigator().save_report()
+    print(f"Saved covariance and market-data plots to {location.plots_dir}")

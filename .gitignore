@@ -201,6 +201,14 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# Project-generated artifacts
+analysis/plots/
+analysis/reports/
+qnn/results/
+qnn/models/
+qnn/plots/
+Optimizer/backtest results/
+
 # Marimo
 marimo/_static/
 marimo/_lsp/

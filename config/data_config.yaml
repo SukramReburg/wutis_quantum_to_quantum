@@ -1,16 +1,16 @@
 assets:
+- ACWI
 - AMZN
+- BNDX
+- GLD
+- IBM
+- IONQ
 - MSFT
 - NVDA
-- GLD
-- USO
-- IBM
 - QBTS
-- RGTI
-- ACWI
 - QUBT
-- IONQ
-- BNDX
+- RGTI
+- USO
 cov_window: 4
 indicators:
 - name: rsi

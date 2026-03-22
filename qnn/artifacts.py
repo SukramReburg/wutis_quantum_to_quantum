@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 
+from analysis.common import AnalysisPathManager
 from data.common import resolve_path
 
 from .config import QNNExperimentConfig
@@ -50,9 +51,18 @@ class ArtifactManager:
             run_tag = f"{mode}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         archive_root = os.path.join(results_root, self.config.metrics.runs_dirname, run_tag)
         latest_root = os.path.join(results_root, self.config.metrics.latest_dirname, mode)
+        analysis_paths = AnalysisPathManager(
+            self.config.base_dir,
+            plots_root=self.config.paths.plots,
+            reports_root=self.config.paths.reports,
+        )
+        archive_analysis = analysis_paths.model(mode, run_tag=run_tag)
+        latest_analysis = analysis_paths.model(mode)
 
         archive = self._location(archive_root)
         latest = self._location(latest_root)
+        archive.plots_dir = archive_analysis.plots_dir
+        latest.plots_dir = latest_analysis.plots_dir
         for location in (archive, latest):
             os.makedirs(location.root, exist_ok=True)
             os.makedirs(location.plots_dir, exist_ok=True)

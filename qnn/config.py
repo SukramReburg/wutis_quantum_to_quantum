@@ -48,9 +48,9 @@ def get_nested(mapping: dict[str, Any], dotted_path: str, default: Any = None) -
 class PathConfig:
     models: str = "qnn/models"
     results: str = "qnn/results"
-    plots: str = "qnn/plots"
+    plots: str = "analysis/plots"
+    reports: str = "analysis/reports"
     optuna: str = "qnn/results/optuna"
-    backtests: str = "Optimizer/backtest_results"
 
 
 @dataclass

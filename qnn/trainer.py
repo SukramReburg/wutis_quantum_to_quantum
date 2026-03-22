@@ -87,6 +87,72 @@ class QNNTrainer:
             max_assets=experiment.plots.max_assets,
         )
 
+    @staticmethod
+    def _fmt_metric(value: float | int | None, digits: int = 6) -> str:
+        if value is None:
+            return "n/a"
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return str(value)
+        if np.isnan(numeric) or np.isinf(numeric):
+            return str(numeric)
+        return f"{numeric:.{digits}f}"
+
+    def _print_run_header(
+        self,
+        artifacts: RunArtifacts,
+        dataset: DatasetSplit,
+        device,
+        loss_name: str,
+    ) -> None:
+        print(
+            (
+                f"[{self.experiment.mode}] run_tag={artifacts.run_tag} "
+                f"device={device.type} runtime={self.experiment.runtime.profile} "
+                f"loss={loss_name} epochs={self.experiment.training.n_epochs} "
+                f"train_samples={len(dataset.X_train_raw)} test_samples={len(dataset.X_test_raw)} "
+                f"outputs={dataset.Y_train.shape[1]}"
+            ),
+            flush=True,
+        )
+
+    def _print_epoch_progress(
+        self,
+        epoch: int,
+        train_metrics: dict[str, float],
+        val_metrics: dict[str, float],
+        current_lr: float,
+        smoothed_val: float,
+        monitor_name: str,
+        monitor_value: float,
+        best_monitor: float,
+        best_epoch: int,
+        epochs_without_improvement: int,
+        improved: bool,
+    ) -> None:
+        marker = "*" if improved else ""
+        print(
+            (
+                f"[{self.experiment.mode}] "
+                f"epoch={epoch:03d}/{self.experiment.training.n_epochs} "
+                f"train_loss={self._fmt_metric(train_metrics['loss'])} "
+                f"val_loss={self._fmt_metric(val_metrics['loss'])} "
+                f"train_rmse={self._fmt_metric(train_metrics['rmse'])} "
+                f"val_rmse={self._fmt_metric(val_metrics['rmse'])} "
+                f"val_mae={self._fmt_metric(val_metrics['mae'])} "
+                f"lr={self._fmt_metric(current_lr, digits=8)} "
+                f"smoothed_val={self._fmt_metric(smoothed_val)} "
+                f"{monitor_name}={self._fmt_metric(monitor_value)} "
+                f"best={self._fmt_metric(best_monitor)} "
+                f"best_epoch={best_epoch} "
+                f"patience={epochs_without_improvement}/{self.experiment.training.early_stopping_patience} "
+                f"uncertainty={self._fmt_metric(val_metrics.get('uncertainty'))}"
+                f"{marker}"
+            ),
+            flush=True,
+        )
+
     def _set_seeds(self) -> None:
         _require_torch()
         seed = self.experiment.runtime.seed
@@ -303,6 +369,7 @@ class QNNTrainer:
         best_monitor = float("inf")
         smoothed_val = None
         epochs_without_improvement = 0
+        self._print_run_header(artifacts=artifacts, dataset=dataset, device=device, loss_name=loss_name)
 
         for epoch in range(1, self.experiment.training.n_epochs + 1):
             model.train()
@@ -388,10 +455,32 @@ class QNNTrainer:
             else:
                 epochs_without_improvement += 1
 
+            self._print_epoch_progress(
+                epoch=epoch,
+                train_metrics=train_metrics,
+                val_metrics=val_metrics,
+                current_lr=current_lr,
+                smoothed_val=float(smoothed_val),
+                monitor_name=monitor_name,
+                monitor_value=monitor_value,
+                best_monitor=best_monitor,
+                best_epoch=best_epoch,
+                epochs_without_improvement=epochs_without_improvement,
+                improved=improved,
+            )
+
             if (
                 epoch >= self.experiment.training.min_epochs_before_stop
                 and epochs_without_improvement >= self.experiment.training.early_stopping_patience
             ):
+                print(
+                    (
+                        f"[{self.experiment.mode}] early_stopping "
+                        f"stopped_epoch={epoch} best_epoch={best_epoch} "
+                        f"best_{monitor_name}={self._fmt_metric(best_monitor)}"
+                    ),
+                    flush=True,
+                )
                 break
 
         stopped_epoch = len(metrics.train_loss_per_epoch)
@@ -477,6 +566,17 @@ class QNNTrainer:
                 predictions=prediction_payload,
                 summary=summary,
             )
+
+        print(
+            (
+                f"[{self.experiment.mode}] completed "
+                f"best_epoch={best_epoch} stopped_epoch={stopped_epoch} "
+                f"test_rmse={self._fmt_metric(final_metrics.get('rmse'))} "
+                f"test_mae={self._fmt_metric(final_metrics.get('mae'))} "
+                f"artifacts={artifacts.latest.root}"
+            ),
+            flush=True,
+        )
 
         return TrainingResult(
             model=model,
